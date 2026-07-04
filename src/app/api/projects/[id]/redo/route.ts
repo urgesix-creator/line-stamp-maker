@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/auth";
+import { IMAGE_NUMBERS } from "@/lib/constants";
 import { BUCKETS, createAdminClient } from "@/lib/supabase/admin";
 
-const REDO_RESET_SLOTS = ["base", "01", "02", "03", "04"];
+const REDO_RESET_SLOTS = [
+  "base",
+  ...IMAGE_NUMBERS.map((no) => String(no).padStart(2, "0")),
+];
 
 // S5「雰囲気を変えてやり直す」→S4ステップ4へ戻す。
 // 1セット1回まで無料、2回目以降は上限（再生成枠）を消費する。
