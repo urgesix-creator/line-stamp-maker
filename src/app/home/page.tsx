@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { reconcileProjectStatus } from "@/lib/projectStatus";
 import { remainingSets } from "@/lib/quota";
 import { signedStampUrl } from "@/lib/storage";
 import { STAMP_RETENTION_DAYS } from "@/lib/constants";
@@ -37,7 +38,15 @@ export default async function HomePage({
     .from("projects")
     .select("*")
     .order("created_at", { ascending: false });
-  const projects = (projectsRaw ?? []) as Project[];
+  const projects = await Promise.all(
+    ((projectsRaw ?? []) as Project[]).map(async (project) => {
+      if (project.status !== "preview_generating" && project.status !== "main_generating") {
+        return project;
+      }
+      const reconciled = await reconcileProjectStatus(project.id);
+      return { ...project, status: reconciled.status };
+    }),
+  );
 
   const remaining = await remainingSets(profile.id, profile.monthly_set_limit);
   const atLimit = remaining <= 0;

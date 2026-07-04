@@ -36,7 +36,7 @@
 | `MAIL_FROM` | 送信元アドレス | `"... <noreply@example.com>"` |
 | `ADMIN_EMAIL` | 申請通知の宛先（管理者メール） | `admin@example.com` |
 | `NEXT_PUBLIC_APP_URL` | 公開URL（招待リンク生成に使用） | `http://localhost:3000` |
-| `CRON_SECRET` | 日次削除Cronの認証用シークレット | 長いランダム文字列 |
+| `CRON_SECRET` | 日次削除・生成復旧Cronの認証用シークレット | 長いランダム文字列 |
 | `ADMIN_INITIAL_EMAIL` | 初期管理者メール（seed用） | `admin@example.com` |
 | `ADMIN_INITIAL_PASSWORD` | 初期管理者パスワード（seed用） | 任意 |
 | `ADMIN_INITIAL_NAME` | 初期管理者表示名（seed用） | `管理者` |
@@ -90,9 +90,9 @@ npm run dev
 2. Vercel で **New Project** → 当リポジトリを import
 3. 上記の環境変数をすべて登録（`NEXT_PUBLIC_APP_URL` は本番URLに）
 4. Deploy
-5. `vercel.json` の Cron（`0 3 * * *` に `/api/cron/cleanup`）が自動登録されます。Cron 認証のため `CRON_SECRET` を設定してください（Vercel Cron は `Authorization: Bearer <CRON_SECRET>` を送ります）。
+5. `vercel.json` の Cron（`/api/cron/cleanup` と `/api/cron/resume-generation`）が自動登録されます。Cron 認証のため `CRON_SECRET` を設定してください（Vercel Cron は `Authorization: Bearer <CRON_SECRET>` を送ります）。
 
-> **画像生成の実行時間**：`generate-preview` / `generate-remaining` などは最大 300 秒（`vercel.json` の `maxDuration`）。順次生成のため、Vercel のプラン上限に留意してください。
+> **画像生成の実行時間**：`generate-preview` / `generate-remaining` などは最大 300 秒（`vercel.json` の `maxDuration`）。各画像は生成後すぐStorageへアップロードされ、途中で止まった場合も `/api/cron/resume-generation` が未生成スロットだけを続きから再開します。
 
 ---
 

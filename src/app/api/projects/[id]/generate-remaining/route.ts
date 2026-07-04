@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateRemaining } from "@/lib/generation";
+import { reconcileProjectStatus } from "@/lib/projectStatus";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -24,19 +25,25 @@ export async function POST(
   if (!project || project.owner_id !== profile.id)
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
 
-  if (project.status !== "preview_review" && project.status !== "main_generating") {
-    return NextResponse.json({ ok: true, status: project.status });
+  const reconciled = await reconcileProjectStatus(id);
+  if (reconciled.status !== "preview_review" && reconciled.status !== "main_generating") {
+    return NextResponse.json({ ok: true, status: reconciled.status });
   }
 
-  try {
-    await generateRemaining(id);
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    console.error("[generate-remaining]", e);
-    await admin.from("projects").update({ status: "preview_review" }).eq("id", id);
-    return NextResponse.json(
-      { error: "生成に失敗しました。もう一度お試しください" },
-      { status: 500 },
-    );
+  if (reconciled.status === "preview_review") {
+    await admin.from("projects").update({ status: "main_generating" }).eq("id", id);
   }
+
+  after(async () => {
+    try {
+      await generateRemaining(id);
+    } catch (e) {
+      console.error("[generate-remaining]", e);
+      await reconcileProjectStatus(id).catch((err) =>
+        console.error("[generate-remaining:reconcile]", err),
+      );
+    }
+  });
+
+  return NextResponse.json({ ok: true, status: "main_generating" });
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { reconcileProjectStatus } from "@/lib/projectStatus";
 import { signedStampUrl } from "@/lib/storage";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ export async function GET(
   if (!project) return NextResponse.json({ error: "not_found" }, { status: 404 });
   if (project.owner_id !== profile.id && profile.role !== "admin")
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  const reconciled = await reconcileProjectStatus(id);
 
   const { data: images } = await admin
     .from("stamp_images")
@@ -46,7 +48,7 @@ export async function GET(
     .eq("state", "pending");
 
   return NextResponse.json({
-    status: project.status,
+    status: reconciled.status,
     regen_remaining: project.regen_remaining,
     clothing_remaining: project.clothing_remaining,
     redo_used: project.redo_used,

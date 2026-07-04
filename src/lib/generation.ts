@@ -13,6 +13,7 @@ import {
   downloadPhoto,
 } from "./storage";
 import { PREVIEW_NUMBERS, IMAGE_NUMBERS } from "./constants";
+import { getGeneratedNumberSlots, reconcileProjectStatus } from "./projectStatus";
 import type { GenKind } from "./constants";
 import type { PhraseItem, Project, WizardAnswers } from "./types";
 
@@ -180,20 +181,24 @@ export async function generatePreview(projectId: string): Promise<void> {
   const phrases = project.phrases as PhraseItem[];
   // 写真があれば本人の土台キャラを先に作り、全枚それを参照する
   const base = await ensureCharacterBase(project);
-  let slot01Buf: Buffer | null = null;
+  const generated = await getGeneratedNumberSlots(projectId);
+  let slot01Buf: Buffer | null = base
+    ? null
+    : await getReferenceBuffer(project.owner_id, project.id, "01");
 
   for (const no of PREVIEW_NUMBERS) {
+    if (generated.has(no)) continue;
     const phrase = phrases.find((p) => p.no === no)!;
     // 土台があれば常にそれを参照。無ければ（写真なし）1枚目を基準に一貫性を取る。
     const reference = base ?? (no === 1 ? null : slot01Buf);
     const res = await generateOne(project, phrase, "preview", reference);
-    if (res.ok && no === 1 && res.buffer) slot01Buf = res.buffer;
+    if (res.ok) {
+      generated.add(no);
+      if (no === 1 && res.buffer) slot01Buf = res.buffer;
+    }
   }
 
-  await admin
-    .from("projects")
-    .update({ status: "preview_review" })
-    .eq("id", projectId);
+  await reconcileProjectStatus(projectId);
 }
 
 /** 残り12枚生成（S6）。5..16枚目、slot01を参照。 */
@@ -210,16 +215,16 @@ export async function generateRemaining(projectId: string): Promise<void> {
   const reference =
     (await ensureCharacterBase(project)) ??
     (await getReferenceBuffer(project.owner_id, projectId));
+  const generated = await getGeneratedNumberSlots(projectId);
 
   for (const no of IMAGE_NUMBERS.filter((n) => n > 4)) {
+    if (generated.has(no)) continue;
     const phrase = phrases.find((p) => p.no === no)!;
-    await generateOne(project, phrase, "main", reference);
+    const res = await generateOne(project, phrase, "main", reference);
+    if (res.ok) generated.add(no);
   }
 
-  await admin
-    .from("projects")
-    .update({ status: "full_review" })
-    .eq("id", projectId);
+  await reconcileProjectStatus(projectId);
 }
 
 /** 個別再生成（F5）。上限は呼び出し側でチェック済み前提。成否を返す。 */

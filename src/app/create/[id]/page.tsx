@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { reconcileProjectStatus } from "@/lib/projectStatus";
 import { WizardClient } from "./WizardClient";
 import type { Project } from "@/lib/types";
 
@@ -19,8 +20,12 @@ export default async function CreatePage({
 
   const { data } = await supabase.from("projects").select("*").eq("id", id).single();
   if (!data) notFound();
-  const project = data as Project;
+  let project = data as Project;
   if (project.owner_id !== profile.id) notFound();
+  if (project.status === "preview_generating" || project.status === "main_generating") {
+    const reconciled = await reconcileProjectStatus(id);
+    project = { ...project, status: reconciled.status };
+  }
 
   // 生成済みステータスなら該当画面へ復帰
   if (project.status === "preview_generating" || project.status === "preview_review")
